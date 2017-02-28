@@ -7,6 +7,11 @@ This is a chrome extension implementing the masterpassword algorithm invented by
 
 The site settings will sync between your chrome installations if you have chrome sync enabled. (also in incognito)
 
+This version is a own fork with improved UI. Other improvements coming later.
+The original version is by [ttryridal](https://github.com/ttyridal) available at [https://github.com/ttyridal/masterpassword-chrome](https://github.com/ttyridal/masterpassword-chrome)
+
+![screenshot](https://raw.githubusercontent.com/varjolintu/masterpassword-chrome/master/gfx/screenshot.png)
+
 # Installation
 
 Find the extension at in the appstore [here](https://chrome.google.com/webstore/detail/masterpassword-for-chrome/hifbblnjfcimjnlhibannjoclibgedmd?hl=en-US&gl=US)
