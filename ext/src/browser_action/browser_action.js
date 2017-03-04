@@ -1,6 +1,6 @@
 /* Copyright Torbjorn Tyridal 2015
    Copyright Sami Vänttinen 2017 (version 2.0.3 modifications)
-   
+
     This file is part of Masterpassword for Chrome (herby known as "the software").
 
     The software is free software: you can redistribute it and/or modify
@@ -16,6 +16,9 @@
     You should have received a copy of the GNU General Public License
     along with the software.  If not, see <http://www.gnu.org/licenses/>.
 */
+/*jshint browser:true, devel:true */
+/* globals chrome, mpw */
+/* jshint esversion: 6 */
 
 (function () {
     "use strict";
@@ -100,7 +103,7 @@ let ui = {
             e = e.appendChild(document.createElement('a'));
             e.href = '';
             e.id = 'showpass';
-            e.innerHTML = visible;
+            e.textContent = visible;
         }
     },
 
@@ -113,7 +116,7 @@ let ui = {
 function get_active_tab_url() {
     var ret = new Promise(function(resolve, fail){
         chrome.tabs.query({active:true,windowType:"normal",currentWindow:true}, function(tabres){
-        if (tabres.length != 1) {
+        if (tabres.length !== 1) {
             ui.user_warn("Error: bug in tab selector");
             console.log(tabres);
             throw new Error("plugin bug");
@@ -146,11 +149,6 @@ var mpw_session,
 function recalculate() {
     ui.thepassword("(calculating..)");
     ui.user_info("Please wait...");
-    if (!ui.sitename()) {
-        ui.thepassword("(need a sitename!)");
-        ui.user_info("need sitename");
-        return;
-    }
     var key_id_mismatch = false;
 
     if (!mpw_session) {
@@ -170,6 +168,13 @@ function recalculate() {
         }
     }
 
+    if (!ui.sitename()) {
+        ui.thepassword("(need a sitename!)");
+        if (!key_id_mismatch)
+            ui.user_info("need sitename");
+        return;
+    }
+
     let siteconfig = ui.siteconfig();
     siteconfig.generation = parseInt(siteconfig.generation, 10);
 
@@ -186,18 +191,23 @@ function recalculate() {
                 siteconfig.generation,
                 siteconfig.type);
 
-        ui.thepassword(Array(pass.length+1).join('&middot;'), pass);
+        ui.thepassword(Array(pass.length+1).join("\u00B7"), pass); // &middot;
 
-        copy_to_clipboard("text/plain", pass);
+        if (session_store.pass_to_clipboard)
+            copy_to_clipboard("text/plain", pass);
         update_page_password_input(pass);
-        if (!key_id_mismatch)
-            ui.user_info("Password for " + ui.sitename() + " copied to clipboard");
+        if (!key_id_mismatch) {
+            if (session_store.pass_to_clipboard)
+                ui.user_info("Password for " + ui.sitename() + " copied to clipboard");
+            else
+                ui.user_info("Password for " + ui.sitename() + " ready");
+        }
 }
 
 function update_with_settings_for(domain) {
     var keys, site;
 
-    if (typeof session_store.sites === 'undefined' ||
+    if (typeof session_store.sites === 'undefined' || domain === '' ||
         typeof session_store.sites[domain] === 'undefined') {
         keys = [];
     } else {
@@ -229,13 +239,15 @@ function popup(session_store_) {
         mpw_session = undefined;
         if (!session_store.username)
             window.setTimeout(function(){
+                ui.user_info("");
                 document.querySelector('#username').focus();
-            }, 0.1);
+            }, 15);
         else {
             document.querySelector('#username').value = session_store.username;
             window.setTimeout(function(){
+                ui.user_info("");
                 document.querySelector('#masterkey').focus();
-            }, 0.1);
+            }, 15);
         }
     } else {
         recalc = true;
@@ -265,7 +277,17 @@ function popup(session_store_) {
 }
 
 window.addEventListener('load', function () {
-    popup(chrome.extension.getBackgroundPage().session_store);
+    chrome.extension.getBackgroundPage().store_get(
+            ['sites', 'username', 'masterkey', 'key_id', 'max_alg_version', 'defaulttype', 'pass_to_clipboard'])
+    .then(data => {
+        //document.getElementById('pwgw_fail_msg').style.display = data.pwgw_failure ? 'inherit' : 'none';
+        popup(data);
+    })
+    .catch(err => {
+        console.error(err);
+        console.error("Failed loading state from background on popup");
+        ui.user_warn("BUG. please check log and report");
+    });
 },false);
 
 document.querySelector('#sessionsetup > form').addEventListener('submit', function(ev) {
@@ -301,11 +323,30 @@ document.querySelector('#storedids_dropdown').addEventListener('click', function
     if (ui.toggle(sids)) {
         sids.innerHTML = '';
         Object.keys(session_store.sites[ui.domain()]).forEach(function(site){
-            sids.appendChild(document.createElement('option')).textContent = site;
+            sids.appendChild(document.createElement('li')).textContent = site;
         });
+        ui.show(sids);
         sids.focus();
     }
 });
+
+document.querySelector('#storedids').addEventListener('click', function(ev) {
+    let site = ev.target.textContent,
+        val = session_store.sites[ui.domain()][site];
+    ui.sitename(site);
+    ui.siteconfig(val.type, val.generation, val.username || '');
+    ui.hide(ev.target.parentNode);
+    ev.target.parentNode.blur();
+    window.setTimeout(recalculate, 1);
+});
+
+document.querySelector('#storedids').addEventListener('blur', e=>{
+    window.setTimeout(()=>{
+        ui.hide(document.querySelector('#storedids'));
+    },1);
+});
+
+
 
 function save_site_changes(){
     let domain = ui.domain();
@@ -317,7 +358,8 @@ function save_site_changes(){
 
     session_store.sites[domain][ui.sitename()] = ui.siteconfig();
 
-    chrome.extension.getBackgroundPage().store_update({sites: session_store.sites});
+    if (domain !== '')
+        chrome.extension.getBackgroundPage().store_update({sites: session_store.sites});
     if (Object.keys(session_store.sites[domain]).length>1)
         ui.show('#storedids_dropdown');
 }
@@ -333,29 +375,22 @@ function warn_keyid_not_matching()
 }
 
 document.querySelector('#main').addEventListener('change', function(ev){
-    if (ev.target.id === 'storedids') {
-        let site = ev.target.value,
-            val = session_store.sites[ui.domain()][site];
-
-        ui.sitename(site);
-        ui.siteconfig(val.type, val.generation, val.username || '');
-        ui.hide(ev.target);
-    } else
-        save_site_changes();
+    save_site_changes();
     recalculate();
 });
 
 document.querySelector('#thepassword').addEventListener('click', function(ev) {
     let t = ev.target.parentNode;
     let dp = t.getAttribute('data-pass');
-    if (dp != null)
+    if (dp != null) {
         t.textContent = dp;
-    t.setAttribute('data-visible', 'true');
+        t.setAttribute('data-visible', 'true');
+    }
     ev.preventDefault();
     ev.stopPropagation();
 });
 
-document.querySelector('#mainPopup').addEventListener('click', function(ev) {
+document.querySelector('body').addEventListener('click', function(ev) {
     if (ev.target.classList.contains('btnconfig')) {
         chrome.tabs.create({'url': 'src/options/index.html'}, function(tab) { });
     }
@@ -367,24 +402,28 @@ document.querySelector('#mainPopup').addEventListener('click', function(ev) {
         ui.user_info("Session destroyed");
     }
     else if (ev.target.id === 'change_keyid_ok') {
+        session_store.key_id = mpw_session.key_id();
         chrome.extension.getBackgroundPage().store_update({
             username: session_store.username,
             masterkey: session_store.masterkey,
-            key_id: mpw_session.key_id(),
+            key_id: session_store.key_id,
             force_update: true
         });
-        ui.user_info("Password for " + ui.sitename() + " copied to clipboard");
+        ui.user_info("ready");
     }
 });
 
-document.querySelector('#main').addEventListener('click', function(ev) {
-    if (ev.target.id === 'siteconfig_show') {
-        var v = document.getElementById('siteconfig');
-        if (v.style.display === 'none')
-            v.style.display = 'block';
-        else
-            v.style.display = 'none';
-    }
+document.querySelector('#siteconfig_show').addEventListener('click', function(ev) {
+    let sc = document.querySelector('#siteconfig');
+    sc.style.transform = 'scale(0,0)';
+    sc.style.transformOrigin = '0 0';
+    sc.style.transition = 'none';
+    window.setTimeout(()=>{
+        sc.style.transition = '0.2s ease-out';
+        sc.style.transform = 'scale(1,1)';
+    }, 1);
+    ui.show(sc);
+    ui.hide('#siteconfig_show');
 });
 
 }());
