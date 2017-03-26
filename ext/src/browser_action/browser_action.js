@@ -135,11 +135,12 @@ function copy_to_clipboard(mimetype, data) {
     document.execCommand("Copy", false, null);
     document.oncopy=null;
 }
-function update_page_password_input(pass) {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, {sender: "no.tyridal.masterpassword", password:pass}, function(response) {
-       // response should contain pasted:true on success. don't care currently
-    });
+function update_page_password_input(pass, username) {
+    chrome.extension.getBackgroundPage().update_page_password(pass, username, true)
+    .then(()=>{
+    })
+    .catch(e=>{
+        console.error(e);
     });
 }
 
@@ -195,7 +196,7 @@ function recalculate() {
 
         if (session_store.pass_to_clipboard)
             copy_to_clipboard("text/plain", pass);
-        update_page_password_input(pass);
+        update_page_password_input(pass, siteconfig.username);
         if (!key_id_mismatch) {
             if (session_store.pass_to_clipboard)
                 ui.user_info("Password for " + ui.sitename() + " copied to clipboard");
@@ -239,24 +240,23 @@ function popup(session_store_) {
         mpw_session = undefined;
         if (!session_store.username)
             window.setTimeout(function(){
-                ui.user_info("");
                 document.querySelector('#username').focus();
             }, 15);
         else {
             document.querySelector('#username').value = session_store.username;
             window.setTimeout(function(){
-                ui.user_info("");
                 document.querySelector('#masterkey').focus();
             }, 15);
         }
     } else {
         recalc = true;
         ui.show('#main');
-        ui.show('#config');
     }
 
     get_active_tab_url()
     .then(function(url){
+        if (url.startsWith('about:') || url.startsWith('chrome-extension:') || url.startsWith('chrome:'))
+            url = '';
         var domain = parse_uri(url).domain.split("."),
             significant_parts = 2;
         if (domain.length > 2 && domain[domain.length-2].toLowerCase() === "co")
@@ -280,7 +280,15 @@ window.addEventListener('load', function () {
     chrome.extension.getBackgroundPage().store_get(
             ['sites', 'username', 'masterkey', 'key_id', 'max_alg_version', 'defaulttype', 'pass_to_clipboard'])
     .then(data => {
-        //document.getElementById('pwgw_fail_msg').style.display = data.pwgw_failure ? 'inherit' : 'none';
+        if (data.pwgw_failure) {
+            let e = ui.user_warn("System password vault failed! ");
+            e = e.appendChild(document.createElement('a'));
+            e.href = "https://github.com/ttyridal/masterpassword-firefox/wiki/Key-vault-troubleshooting";
+            e.target = "_blank";
+            e.textContent = "Help?";
+            data.masterkey=undefined;
+        } else
+            ui.user_info("");
         popup(data);
     })
     .catch(err => {
@@ -312,7 +320,6 @@ document.querySelector('#sessionsetup > form').addEventListener('submit', functi
 
         ui.hide('#sessionsetup');
         ui.show('#main');
-        ui.show('#config');
         recalculate();
     }
 });
@@ -382,12 +389,19 @@ document.querySelector('#main').addEventListener('change', function(ev){
 document.querySelector('#thepassword').addEventListener('click', function(ev) {
     let t = ev.target.parentNode;
     let dp = t.getAttribute('data-pass');
-    if (dp != null) {
+    if (dp) {
         t.textContent = dp;
         t.setAttribute('data-visible', 'true');
     }
     ev.preventDefault();
     ev.stopPropagation();
+});
+
+document.querySelector('#copypass').addEventListener('click', function(ev) {
+   let pass = document.querySelector('#thepassword').getAttribute('data-pass');
+   copy_to_clipboard("text/plain", pass);
+   if (pass && pass !== '')
+        ui.user_info("Password for " + ui.sitename() + " copied to clipboard");
 });
 
 document.querySelector('body').addEventListener('click', function(ev) {
@@ -396,7 +410,6 @@ document.querySelector('body').addEventListener('click', function(ev) {
     }
     else if (ev.target.classList.contains('btnlogout')) {
         session_store.masterkey = null;
-        ui.hide('#config');
         chrome.extension.getBackgroundPage().store_update({masterkey: null});
         popup(session_store);
         ui.user_info("Session destroyed");

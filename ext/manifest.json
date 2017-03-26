@@ -1,6 +1,6 @@
 {
   "name": "MasterPassword for chrome",
-  "version": "2.1.0",
+  "version": "2.1.3",
   "manifest_version": 2,
   "description": "Remember your MasterPassword, and this app will generate unique passwords for every other site you visit",
   "author": "Torbjorn Tyridal (ttyridal)",
@@ -28,10 +28,8 @@
     "default_title": "MasterPassword",
     "default_popup": "src/browser_action/browser_action.html"
   },
-  "content_scripts": [
-  {"matches":["<all_urls>"], "js": ["src/browser_action/content.js"]}
-  ],
   "permissions": [
+    "activeTab",
     "clipboardWrite",
     "storage",
     "alarms",

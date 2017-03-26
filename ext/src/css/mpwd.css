@@ -27,7 +27,8 @@ main p {
     margin-bottom: 1em;
 }
 
-main a, main a:link {
+main a, main a:link,
+.hightlight-links a, .hightlight-links a:link{
     font-style: italic;
     text-decoration: underline;
 }
@@ -250,6 +251,11 @@ button#siteconfig_show {
   text-overflow: ellipsis;
 }
 
+.warning_message {
+    color: white;
+    background-color: red;
+}
+
 #usermessage.warning_message {
     color: white;
     background-color: red;
@@ -294,9 +300,12 @@ button#siteconfig_show {
   height: auto;
 }
 
+.configitem {
+    clear: both;
+}
 .configitem > label {
     margin-left: 1em;
-    font-size: 0.8em;
+    font-size: 1em;
     min-width: 14em;
     float:left;
 }
@@ -304,13 +313,18 @@ button#siteconfig_show {
 .configitem > input,
 .configitem > select,
 .configitem > option {
-    margin-top:1.5em;
-    margin-left:-8em;
+    display: block;
+    clear: both;
+    margin-bottom:0.8em;
+    margin-left: 3em;
     font-size: 1em;
     font-weight: normal;
-    width: 8em;
     height: 1.8em;
     border: 0;
+    width: 9em;
+}
+.configitem > input[type=checkbox] {
+    width: 3em;
 }
 
 #stored_sites {
@@ -320,4 +334,28 @@ button#siteconfig_show {
 
 #stored_sites input {
     font-size: 1em;
+}
+
+.list-clean {
+    margin-top: 0;
+    list-style-type: none;
+}
+
+.backdrop {
+    position:fixed;
+    width:100%;
+    height:100%;
+    top:0;
+    left:0;
+    background:rgba(0,0,0,0.7);
+    z-index:500;
+}
+.dialog {
+    border:2px black inset;
+    position:fixed;
+    top:5em;left:5em;
+    width:50%;
+    background:white;
+	color:black;
+    padding: 1em;
 }
